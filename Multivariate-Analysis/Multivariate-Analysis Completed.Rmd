@@ -1,0 +1,573 @@
+---
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+
+# Assignment 4 : Muli variate analysis
+
+# Multivariate data
+In this document, we look at the general problem of dealing with highly multivariate data, which in later documents we will tackle using tools from the [*R* `tidyverse`](02-the-r-tidyverse.md), and techniques broadly categorised as [dimensional reduction](03-dimensional-reduction.md) and [classification](04-classification-and-clustering.md).
+
+## Libraries
+
+```{r}
+install.packages("scatterplot3d")
+```
+
+As usual, we need to load some libraries. If any are missing from your installation, install them in the usual way.
+```{r, results=FALSE}
+library(sf) # for spatial data
+library(tmap) # simple mapping
+library(MASS) # multivariate methods
+library(scatterplot3d) # 3D plots
+library(tidyr)
+library(ggplot2) # nice plots - we will learn more about this later in the session
+```
+
+## Data
+Today I will use a demographic dataset for Auckland region in New Zealand, assembled by unzipping the nz-2193-cau-2013.zip file and opening the nz-2193-cau-2013.shp on ArcGIS pro to select areas within auckland region in New Zealand. 
+
+```{r,results=FALSE}
+sfa <- st_read('Auckland.shp')
+
+sfa <- drop_na(sfa)
+sfa.d <- st_drop_geometry(sfa)
+
+
+```
+
+
+
+
+
+
+
+
+I will visually explore most of our dataset via 
+
+1) boxplot. 
+```{r}
+boxplot(as.list(st_drop_geometry(sfa)), horizontal=T, par(las=1, mar=c(3,10,2,1)))
+```
+
+ I used  `par(mar=...)` to alter the figure margins to support the variables names, and `par(las=1)` to align
+ the labels the correct way.
+
+Most of the variables are expressed as the amount of people participating. The `PopUr06` had this highest population as this is the varailbe specific  to the total population of  the participants in 2006 (along with PopUR13 in 2013, and PopUR01 in 2001 ). 
+
+The important thing is that this is clearly a complicated dataset. There may be things to learn about San Francisco in 2014 from it, but we'll have to work at extracting that information.
+
+2)  Maps
+ For instance: 
+```{r}
+tm_shape(sfa) +
+  tm_polygons(col='ExSmoker') +
+  tm_legend(legend.outside=T)
+```
+
+Note: we can also use `tmap_mode('view')` to view maps as a web map for orientation. 
+
+
+3) ploting  
+
+```{r, echo=FALSE,results='hide',fig.keep='all',warning=FALSE,message=FALSE,error=FALSE}
+plot(sfa)
+```
+
+
+# Introducing the `tidyverse`
+
+Here I will use the following libariesto prompt tidyverse - away of cleaning/tidying our dataset 
+
+ 
+```{r}
+library(sf)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+```
+
+
+
+we have 64 list of columns in our dataset from the `names()` 
+```{r}
+names(sfa)
+```
+
+I will be focusing on: 1) smoking status based on race, gender and age and 2) newly married/married status based on 
+age and race. 
+
+
+Here I will select/modify the dataset to match my focus/aim mentioned above.
+
+subsetting the gender, age , race of smokers in auckland 
+
+```{r}
+ 
+smoker_gender= sfa %>% 
+  select(AUName, PopUR13, Male_UR13,Female_UR1,Smoker) %>% 
+  mutate(male_numbers = Male_UR13/PopUR13*Smoker,female_numbers = Female_UR1/PopUR13*Smoker,male_percentage = Male_UR13/PopUR13,female_percentage = Female_UR1/PopUR13) %>% 
+ select(AUName,male_numbers,female_numbers,male_percentage,female_percentage,Smoker)
+
+
+smoker_race= sfa %>%
+  select(AUName, European, Maori,Pacific,Asian, Smoker) %>% 
+  mutate(European = European/(European+Maori+Pacific+Asian)*Smoker,
+         Maori = Maori/(European+Maori+Pacific+Asian)*Smoker,
+         Pacific =  Pacific/(European+Maori+Pacific+Asian) *Smoker,
+         Asian = Asian/(European+Maori+Pacific+Asian) *Smoker) %>% 
+ select(AUName,European,Maori,Pacific,Asian,Smoker)
+
+  
+  
+smoker_YrUR=sfa %>%
+  select(AUName, YrUR0, YrUR1_4,YrUR5_9,YrUR10_14,YrUR15_29,YrUR30plus,Smoker) %>% 
+  mutate(YrUR0 = YrUR0/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus)*Smoker,
+         YrUR1_4_9 = (YrUR1_4 +YrUR5_9)/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus)*Smoker,
+         YrUR10_14_29 =  (YrUR10_14+YrUR15_29)/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus) *Smoker,
+         YrUR30plus = YrUR30plus/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus) *Smoker) %>% 
+         select(AUName,YrUR0,YrUR1_4_9,YrUR10_14_29,YrUR30plus,Smoker)
+         
+```
+
+
+Subseting marriage status based on age, race and gender 
+
+
+
+```{r}
+  
+    
+marrried_age= sfa %>% 
+  select(AUName, Age0_4, Age5_9, Age10_14, Age15_19 ,Age20_24,Age25_29,Age30_34,Age35_39,Age40_44,Age45_49,Age50_54,   Age55_59,Age60_64,Age65plus,Married) %>%   
+
+mutate( Age0_14 = (Age0_4 + Age5_9 + Age10_14) /(a= Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus)*Married,
+        
+        Age15_19=  Age15_19/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married,
+        Age20_39 = (Age20_24 + Age25_29 + Age30_34 + Age35_39)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married,
+        Age40_59 = (Age40_44 + Age45_49+ Age50_54 + Age55_59)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married,
+        Age60plus=(Age60_64+ Age65plus)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married) %>% 
+  
+ select(AUName,Married,Age0_14,Age15_19,Age20_39,Age40_59,Age60plus)
+
+
+  
+married_race= sfa %>% 
+  select(AUName, Married, European, Maori,Pacific,Asian) %>% 
+  mutate(European = European/(European+Maori+Pacific+Asian)*Married,
+         Maori = Maori/(European+Maori+Pacific+Asian)*Married,
+         Pacific =  Pacific/(European+Maori+Pacific+Asian) *Married,
+         Asian = Asian/(European+Maori+Pacific+Asian) *Married) %>% 
+ select(AUName, Married, European, Maori,Pacific,Asian)
+
+
+
+single_gender=  sfa %>%
+  select(AUName, Single, Male_UR13, Female_UR1) %>% 
+  mutate(male = Male_UR13/(Male_UR13+ Female_UR1)*Single,
+         female = Female_UR1/(Male_UR13+ Female_UR1)*Single) %>% 
+ select(AUName, Single, male, female)
+
+```
+
+
+
+
+here we can create a table of of the highest amount of smokers and marirage status: 
+
+
+```{r}
+library(sf)
+library(dplyr)
+```
+
+
+
+
+1) smokers 
+
+
+```{r}
+cau.sorted <- smoker_gender %>%
+  arrange(desc(Smoker))
+
+
+head(st_drop_geometry(cau.sorted), n=10)
+
+# the desc(Smoker) is to make the sort in descending order from largest to smallest (edited) 
+# you can sort by multiple variables just by listing them in the arrange()
+
+```
+
+
+
+
+```{r}
+smoker_race.sorted <- smoker_race %>%
+  arrange(desc(Smoker))
+
+head(st_drop_geometry(smoker_race.sorted), n=10)
+```
+
+
+
+
+
+
+```{r}
+smoker_YrUR.sorted <- smoker_YrUR %>%
+  arrange(desc(Smoker))
+
+head(st_drop_geometry(smoker_YrUR.sorted), n=10)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+2) marriage status  
+
+
+
+marriage age
+
+```{r}
+marrried_age.sorted <- marrried_age %>%
+  arrange(desc(Married))
+
+head(st_drop_geometry(marrried_age.sorted), n=10)
+```
+
+
+
+marriage race
+```{r}
+married_race.sorted <- married_race %>%
+  arrange(desc(Married))
+
+head(st_drop_geometry(married_race.sorted), n=10)
+```
+
+
+
+single gender
+```{r}
+single_gender.sorted <- single_gender %>%
+  arrange(desc(Single))
+
+head(st_drop_geometry(single_gender.sorted), n=10)
+```
+
+
+
+From our analysis, we can see that some datasets have a relationship with one another. 
+Now, we will have to combined the variables of interest into one dataframe in order for us to run  multiple or add Weights to the analysis. 
+
+
+```{r}
+married_total= 
+sfa %>% 
+  select(AUName, PopUR13, Male_UR13,Female_UR1,Smoker,European, Maori,Pacific,Asian,YrUR0, YrUR1_4,YrUR5_9,YrUR10_14,YrUR15_29,YrUR30plus,Married,Age0_4, Age5_9, Age10_14, Age15_19 ,Age20_24,Age25_29,Age30_34,Age35_39,Age40_44,Age45_49,Age50_54,Age55_59,Age60_64,Age65plus,European, Maori,Pacific,Asian,Single) %>% 
+   mutate(Age0_14_married = ((Age0_4 + Age5_9 + Age10_14) /(a= Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus)*Married)/Married,
+        
+        Age15_19_married=  (Age15_19/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        Age20_39_married = ((Age20_24 + Age25_29 + Age30_34 + Age35_39)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        Age40_59_married = ((Age40_44 + Age45_49+ Age50_54 + Age55_59)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        Age60plus_married=((Age60_64+ Age65plus)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        European_married = (European/(European+Maori+Pacific+Asian)*Married)/Married,
+         Maori_married = (Maori/(European+Maori+Pacific+Asian)*Married)/Married,
+         Pacific_married =  (Pacific/(European+Maori+Pacific+Asian) *Married)/Married,
+         Asian_married = (Asian/(European+Maori+Pacific+Asian) *Married)/Married,
+         #single_male = (Male_UR13/(Male_UR13+ Female_UR1)*Single)/Single,
+         #single_female = (Female_UR1/(Male_UR13+ Female_UR1)*Single)/Single
+        ) %>%
+  
+    select(Age0_14_married,Age15_19_married,Age20_39_married,Age40_59_married,Age60plus_married,European_married, Maori_married,Pacific_married,Asian_married)
+
+head(st_drop_geometry(married_total), n=10)
+    
+```
+
+
+
+
+```{r}
+      
+smoker_total= 
+sfa %>% 
+  select(AUName, PopUR13, Male_UR13,Female_UR1,Smoker,European, Maori,Pacific,Asian,YrUR0, YrUR1_4,YrUR5_9,YrUR10_14,YrUR15_29,YrUR30plus,Married,Age0_4, Age5_9, Age10_14, Age15_19 ,Age20_24,Age25_29,Age30_34,Age35_39,Age40_44,Age45_49,Age50_54, Age55_59,Age60_64,Age65plus,European, Maori,Pacific,Asian,Single) %>% 
+   mutate(YrUR0_smoker = (YrUR0/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus)*Smoker)/Smoker,
+         YrUR1_4_9_smoker = ((YrUR1_4 +YrUR5_9)/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus)*Smoker)/Smoker,
+         YrUR10_14_29_smoker =  ((YrUR10_14+YrUR15_29)/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus)*Smoker)/Smoker,
+         YrUR30plus_smoker = (YrUR30plus/(YrUR0 +YrUR1_4 + YrUR5_9 + YrUR10_14 +YrUR15_29 +YrUR30plus)*Smoker)/Smoker,
+         male_smoker = (Male_UR13/PopUR13*Smoker)/Smoker,
+         female_smoker = (Female_UR1/PopUR13*Smoker)/Smoker,
+         European_smoker = (European/(European+Maori+Pacific+Asian)*Smoker)/Smoker,
+         Maori_smoker = (Maori/(European+Maori+Pacific+Asian)*Smoker)/Smoker,
+         Pacific_smoker =  (Pacific/(European+Maori+Pacific+Asian)*Smoker)/Smoker,
+         Asian_smoker = (Asian/(European+Maori+Pacific+Asian)*Smoker)/Smoker,
+         single_female = (Female_UR1/(Male_UR13+ Female_UR1)*Single)/Single
+         ) %>%
+  
+ 
+    select(male_smoker,female_smoker,European_smoker, Maori_smoker,Pacific_smoker,Asian_smoker,YrUR0_smoker,YrUR1_4_9_smoker,YrUR10_14_29_smoker,YrUR30plus_smoker,Male_UR13,Female_UR1,Smoker,European, Maori,Pacific,Asian,YrUR0, YrUR1_4,YrUR5_9,YrUR10_14,YrUR15_29,YrUR30plus,Married,Age0_4, Age5_9, Age10_14, Age15_19 ,Age20_24,Age25_29,Age30_34,Age35_39,Age40_44,Age45_49,Age50_54,Age55_59,Age60_64,Age65plus,Single)
+
+head(st_drop_geometry(smoker_total), n=10)
+
+
+```
+
+
+
+
+
+
+
+
+
+```{r}
+married_smoker_total_1= 
+smoker_total %>% 
+  select(male_smoker,female_smoker,European_smoker, Maori_smoker,Pacific_smoker,Asian_smoker,YrUR0_smoker,YrUR1_4_9_smoker,YrUR10_14_29_smoker,YrUR30plus_smoker,Male_UR13,Female_UR1,Smoker,European, Maori,Pacific,Asian,YrUR0, YrUR1_4,YrUR5_9,YrUR10_14,YrUR15_29,YrUR30plus,Married,Age0_4, Age5_9, Age10_14, Age15_19 ,Age20_24,Age25_29,Age30_34,Age35_39,Age40_44,Age45_49,Age50_54,Age55_59,Age60_64,Age65plus,Single) %>% 
+   mutate(Age0_14_married = ((Age0_4 + Age5_9 + Age10_14) /(a= Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus)*Married)/Married,
+        
+        Age15_19_married=  (Age15_19/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        Age20_39_married = ((Age20_24 + Age25_29 + Age30_34 + Age35_39)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        Age40_59_married = ((Age40_44 + Age45_49+ Age50_54 + Age55_59)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        Age60plus_married=((Age60_64+ Age65plus)/(Age0_4 + Age5_9 +Age10_14 + Age15_19 + Age20_24 + Age25_29 + Age30_34 + Age35_39 + Age40_44 + Age45_49+ Age50_54 + Age55_59 +Age60_64+ Age65plus) *Married)/Married,
+        European_married = (European/(European+Maori+Pacific+Asian)*Married)/Married,
+         Maori_married = (Maori/(European+Maori+Pacific+Asian)*Married)/Married,
+         Pacific_married =  (Pacific/(European+Maori+Pacific+Asian) *Married)/Married,
+         Asian_married = (Asian/(European+Maori+Pacific+Asian) *Married)/Married,
+         single_male = (Male_UR13/(Male_UR13+ Female_UR1)*Single)/Single,
+         single_female = (Female_UR1/(Male_UR13+ Female_UR1)*Single)/Single) %>%
+  
+    select(Age0_14_married,Age15_19_married,Age20_39_married,Age40_59_married,Age60plus_married,European_married, Maori_married,Pacific_married,Asian_married,single_male,single_female,male_smoker,female_smoker,European_smoker, Maori_smoker,Pacific_smoker,Asian_smoker,YrUR0_smoker,YrUR1_4_9_smoker,YrUR10_14_29_smoker,YrUR30plus_smoker)
+
+head(st_drop_geometry(married_smoker_total_1), n=10)
+
+
+```
+
+
+
+
+
+Note: The marrage as this seems unrealistic -- It could prevalent in some cultures or could be as a reslut of peer pressure/negative unfluences. 
+
+
+
+1)  # Dimension reduction methods
+
+I will be using  dimensionality reduction, principal component analysis, to find the a linear mapping of the infomation to a reduced dimensional space to allow the maximisation of the  variance of the data in thereduced dimension. 
+
+I will be running this as the variables seemed similar distributions with one another .This means the variables are non-independent and  likely to be weighted together with other variables. I will be using about 14 row from the subsetted data which as initally ...rows.
+
+This analysis works by using the processing of the correlation matrix of the datagenerally focusing on  the computation of matrix eigenvectors and and corresponding eigenvalues. The eigenvectors which links to the largest eigenvalues (the principal components) can rebuild a great portion of the variance of the original information. Furthermore, the first few eigenvectors typically contribute to most of the system's energy, particularly in low-dimensional systems.
+
+
+
+I will run the analysis via `princomp` 
+
+In order for me to run the principal component analysis I will have to remove the na values and geometry columns. 
+
+```{r}
+library(sf)
+library(tmap)
+library(tidyr)
+
+smoker_married_total <- drop_na(married_smoker_total_1) # removing the na values
+smoker_married_total.d <- st_drop_geometry(smoker_married_total) # removing the geometry columns 
+```
+
+
+
+```{r}
+
+smoker_married_total.pca <- princomp(smoker_married_total.d, cor=TRUE)  # the cor=TRUE indcate that there is a correlation. 
+
+```
+
+here is the summary of the components. Here we can see there is 21 components and tells us the Standard deviation, Proportion of Variance and Cumulative Proportion. 
+
+these components are ordered from the highest Proportion of Variance to the lowest.For example, Proportion of Variance of compnent 1 is 0.30 (30%), followed by 2.0 for compnent 2 and etc... 
+
+We can see that 80% from this dataset is acounted by the first 5 princliple components; is not all of the variance but I is a big portion of it.  
+
+which means I might select 5 attributes as it is easier to analyse than 21; as we add more of these components there will be extra bits of addtional information adding on. So its better to add less. 
+
+
+
+
+
+```{r}
+summary(smoker_married_total.pca) 
+```
+
+We can find the principal components of each weighted amount of the original variables via  using the `loadings` function of the outcome.
+
+```{r}
+smoker_married_total.pca$loadings
+```
+
+This helps us find the interpretation of individual component from variable weights negative or positive on individual component in the table of loadings.
+
+the components works by muliplying and adding each of atriubutes within that compoment. For example, in component 1,Age0_14_married times 0.233  plus Age15_19_married times 0.171 plus Age20_39_married times 0.174 and etc...
+
+
+For the loading we can see that the compoent 1 that both pasific married  (0.330) and pasific smokers (0.330) had the highest weight while the lowest weights are european smoker  and european married (both -0.369).  This means that a majority of smokers are pasifics and the lowest is european smokers in that neighborhood 
+
+compoent 2, on the other hand, has high weights for female smokers (0.252) and that are single (0.256) while low weights are zero year smoking residence in New Zealand who are both Asian smokers that are married. the neightborhoods could possiblty have more females. 
+
+Here, I will create a biplot  
+
+```{r}
+biplot(smoker_married_total.pca, pc.biplot=TRUE, cex=0.8)
+```
+
+
+
+this enables us to view which observations (e.g. census territories) score have high or low on individual variable and which variable weight are similar to the components (that point in similar directions) in space by examing whcih ones are realted.
+
+each of these points realted to the obervation of these data that shows which of these obervations have high weights on orginal values and  one which components  
+
+for example, principle  component 1 weights depend highly on Maori smokers who are females while compoent 2 weights highly on people of smokers while having residency in new zealand from 10 to 29 years. seems as if compoent 2 demsion focuses on smoker who have residency while compoent looks at the race, marage and smoking staus. 
+
+Note: It is hard to read but it gves us an ideas, its a rough demonstration  
+
+
+both loadings and biplot allows us to figure out the analysis of principle compnents 
+
+Finally, we can take the components from the PCA analysis `scores` result which will allow me to create a map ( shown below)
+
+```{r}
+
+smoker_married_total$PC1 <- smoker_married_total.pca$scores[,1] # the [,1] means taking the first prinicple compnent or the first columb 
+tmap_mode('view')
+tm_shape(smoker_married_total) +
+  tm_polygons(col='PC1') +
+  tm_legend(legend.outside=T)
+
+```
+
+
+Results: 
+
+from the loading and the biplot principle comonent 1 seems to relate to maori and pasific smokers who are married  due to the weights (compnent values over 0.2 ;excluding Age of marrage ranging from 0-14 years old ). 
+
+here the high values displayed from dark green( 5-10) to light (0-5) are low amounts of smoking amunst the pastikers. the yellow colour (-5 to 0) displays areas average/medium amount of pasika smokers while the red (-10 to -5) indicate siginifcant amount of pasiki smokers. 
+
+there is less pastik smokers am towards the urban areas of auckland e.g. west auckland, britomart, Auckland city Central district. this my be because pastikas/ moiras, especally pastikas, 
+
+the Kawau Island had the highest amoiut of pasitik smokers 
+
+areas towards the beach e.f. Muriwai, piha and karekare then to have more maouri and pasiki people 
+
+areas towards mangre, manuku, papatoetoe and manurewa tends to have less paski smokers 
+
+PCA is popular when first looking at data demenional reduction techniques.  
+
+form the somewhat high married pasikic and maoiri weights they then ti be married towards the rural areas. I think I is possibley because property prices can be high especally when staring a famility, it is more spaceous which means couples an have more privacy.  
+
+
+## Clustering
+
+Whereas dimensional reduction methods focus on the variables in a dataset, 
+
+I will be using the clustering methods to focus on the observations and the by breaking the dataset into groups or clusters of observations to find the differences and similarities between the variables in the dataset. 
+
+to understand the ‘similar' and 'different', it is important to comprehend the distance in Euclidean (two dimensional) space which is the is the square root of the amount of the squared difference in individual coordinate to greater/upper dimensions.  For instance, 21-dimensional data space, we take the sum of the squared differences in each of the 21 dimensions (i.e. on each variable) between two explanations, add and take the square root. 
+We will need to keep in mind that all the attributes can be rescaled which means the changes in one attribute that has  large value do not mask out the changes in other variables and that we exclude the strongly correlated variables in the analysis (hence in some cases clustering is typically  used on principal component scores).
+
+The clustering method I will use if the K-means clustering by: 1) finding the number of clusters named k and the centres of the cluster, 2) Allocate each outcome to the closest cluster centre and compute the average centre of individual cluster. 
+
+```{r}
+km <- kmeans(smoker_married_total.d, 5) # we use the kmans function add it to our smoker_married_total.d dataset and we set the number of clusters to 5
+clusters <- fitted(km, method='classes') # now we can extra the results form the  clusters bove
+smoker_married_total$c5 <- clusters # we can add the new variables to our dataset
+tmap_mode('view') # maping it 
+tm_shape(smoker_married_total) +
+  tm_polygons(col='c5', palette='cat') +
+  tm_legend(legend.outside=T)
+```
+
+Here, we are using 5 clusters, so we are clustering alike variables to one another - a paartitioning of the areas into clusters. 
+
+Before we run the `kmeans` function, I will need to choose the number of clusters, I picked 5 because it seemed reasonable for the variable in our dataset. We got the cluster assignments via`fitted` function, changed  palette to `cat` as we are dealing with categorical variable  and then we map it. 
+
+Thsi method is not determanistic which means I will have diiferent outcomes each time we run it, but it can be quite similar sometimes. 
+
+
+We can improve the quality of this method from the `kmeans`function;  to measure the variance within and between cluster. 
+
+we can see the the rural areas tend to be grouped together which is shown as yellow with at value of 1. 
+As the clusters approtch towards the center/high/ main part of the urban areas; it changes colours. For example, from the yellow urban cluster, the cluster 3 orange and red cluster 2  aproches to cluster 4 and 5 shown as a light  and dark purple colour which somewhat represents high urban areas or even high populated areas. I know this, as the dark and light purple custered areas are at west and city center of auckland district.  
+
+
+### Hierarchical clustering
+
+
+K-means does not tell us about the structure of the clusters it creates.
+Hence, Hierarchical methods we tell us how the outcomes have been gathered into the clusters. 
+The algorithm works by 'agglomerative' approach as we work with each observation and in different path frequently via subsets until we get to each cases, 
+
+1) computing the (multivariate) distances from every set of observations, 2) locate the closest pair/set of observations and combined them into a cluster, 3) Finding the recently generated cluster which will tell us the distances from all the remaining observations.
+
+This method is popular with network data when cluster detection is known as *community detection* 
+
+To do this, we will need to use the `hclust` function
+
+```{R}
+hc <- hclust(dist(smoker_married_total.d))
+```
+
+
+Here, we will use the tmap to display the finding. It is better than using the cluster dendrogram  ( by running plot(hc)) due to the height of the joined pair clusters and merging branches may make it look messy.
+
+
+```{r}
+smoker_married_total$hc5 <- cutree(hc, k=5) # can use the cutree function  to focus on Hierarchical clustering of 5 clusters. 
+
+tm_shape(smoker_married_total) +
+  tm_polygons(col='hc5', palette='cat') +
+  tm_legend(legend.outside=T)
+```
+
+ 
+
+
+these is a clear similarities between this output and the k-means one. 
+
+there are variety Different approaches to calculating distances such as using  `dist` and various other options for the  such as `method` option in the `hclust` function.
+
+Once clusters have been assigned, we can do further analysis comparing characteristics of different clusters. For example: 
+
+```{r}
+boxplot(smoker_married_total$Pacific_smoker  ~ smoker_married_total$hc5, xlab='Cluster', ylab='Pacific_smoker') # here we are ploting the orginal vaiables to the Hierarchical clusters of 5.
+```
+
+
+This boxplot can help us find interpate the Hierarchical clustering map. 
+for example, from the Hierarchical clustering map, we can see that cluster 5 (dark purple colour) has high amounts of pasific smokers form the boxplot shown below folowed by  3 (as orange),4 (being light purple),2 (red) and the lowest amount of pastific smokers is 1 displayed as yellow.    
+
+We can change and the orginal values to find more connections with the  Hierarchical clustering map. 
+
+ 
+ ### Refernece 
+ 
+ 
+
