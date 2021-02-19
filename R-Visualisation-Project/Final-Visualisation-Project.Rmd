@@ -1,0 +1,628 @@
+---
+title: "Graphs R Us - Data Visualisation with R Project"
+author: "Pawaneet Kaur"
+output: rmarkdown::github_document
+
+---
+
+
+## setting up work directory: 
+
+getwd ()Indicates the current working directory without no arguments by returning a NULL or character string. # This is important for debugging, larger programs to reiterate via the directory contents. 
+
+On Windows the returned path use "/" between directory levels as a separator unless in a root directory (of a share or drive on Windows)
+
+setwd() function changes and sets the existing working director navigated via getwd function.
+
+
+
+## chilling_sensitivity.csv
+
+
+```{r}
+cs = read.csv("chilling_sensitivity.csv") # activating the chilling_sensitivity.csv dataframe; represented  as "cs"
+```
+
+
+
+## drought_elevation.csv
+
+
+```{r}
+elv = read.csv("drought_elevation.csv") # activating the drought_elevation.csv dataframe; displayed as "elv"
+
+```
+
+
+
+The "read.csv" reads a excel table format files to generate a data frame 
+
+
+
+
+### Part 1 ###
+
+
+
+##  Data Aggregation 
+
+
+```{r}
+library(dplyr)
+
+```
+
+
+```{r}
+head(cs, n=3) # the x axis independent variable is ambient CO2 concentration (ppm) 
+#the  while the y axis dependent variable is the  photosynthetic rate (µmol m-2 s -1)
+```
+
+
+
+# viewing original data via scatterplot
+
+```{r}
+plot( photo ~ conc, data = cs)
+
+```
+
+
+# Standard error function
+
+```{r}
+se <- function(x, na.rm = FALSE)# a.rm = FALSE removes blank cells 
+{
+  if(na.rm == TRUE)
+  {
+    sqrt(var(x, na.rm = T)/length(na.omit(x)))
+  }
+  else
+  {
+    sqrt(var(x)/length(x))
+  }
+}
+
+
+pcs <- group_by(.data = cs, treat, spec,conc) %>% summarise(p_avv = mean(photo)
+    , pos = mean(photo) + se(photo), neg = mean(photo) - se(photo))
+head(pcs,n=3)
+
+```
+
+
+# without concentration 
+
+```{r,warning=FALSE,message=FALSE,results='hide'}
+pcsnc <- group_by(.data = cs, treat, spec) %>% summarise(p_avvnc = mean(photo)
+, pos = mean(photo) + se(photo), neg = mean(photo) - se(photo))
+```
+
+
+## Wide formating our photosynthesis rate data
+
+```{r,warning=FALSE,message=FALSE,results='hide'}
+library(reshape2) # required to run acast function
+wides= acast(data = pcsnc, formula = treat ~ spec, value.var = "p_avvnc")
+wides
+```
+
+
+
+##  Multi-panel scatterplot in traditional graphics system 
+
+I have not subsetted from the dplyr package. 
+
+
+```{r}
+# four panel Layout
+
+par(mfrow=c(2, 2)) # 2 rows and 2 columns
+
+# Dots/points in blue indicate nonchilled and red as chilled 
+
+##### species #####
+
+## Lolium perenne 
+
+plot(cs$photo[cs$spec=="Lolium perenne"][cs$treat=="nonchilled"] ~ 
+       cs$conc[cs$spec=="Lolium perenne"] [cs$treat=="nonchilled"]
+     , col= "blue", pch= 17, ylab= expression(paste("Photosynthesis rate ( ", mu," mol m"^-2, " s"^-1, ")"))
+     ,xlab='', main = substitute(paste(italic('Lolium perenne'))))
+points(cs$photo[cs$spec=="Lolium perenne"][cs$treat=="chilled"] ~ 
+         cs$conc[cs$spec=="Lolium perenne"][cs$treat=="chilled"]
+       , col= "red",pch= 20)
+
+# legend
+
+l <- legend( "bottomright"
+             , inset = c(0,0) 
+             , cex = 1
+             , bty = "n"
+             , legend = c("Chilled", "Non Chilled")
+             , text.col = c("red", "blue")
+             , pt.bg = c("red","blue")
+             , pch = c(20,17)
+             , col = c("red","blue"))
+
+
+
+## Cynosurus cristatus 
+
+plot(cs$photo[cs$spec=="Cynosurus cristatus"] [cs$treat=="nonchilled"] ~ 
+       cs$conc[cs$spec=="Cynosurus cristatus"] [cs$treat=="nonchilled"]
+     , col= "blue", pch= 17, ylab='',xlab='', main = substitute(paste(italic('Cynosurus cristatus')))) 
+
+points(cs$photo[cs$spec=="Cynosurus cristatus"][cs$treat=="chilled"] ~ 
+         cs$conc[cs$spec=="Cynosurus cristatus"][cs$treat=="chilled"]
+       , col= "red",pch= 20)
+
+
+## Dactylis glomerata  
+
+plot(cs$photo[cs$spec=="Dactylis glomerata"] [cs$treat=="nonchilled"] ~ 
+       cs$conc[cs$spec=="Dactylis glomerata"] [cs$treat=="nonchilled"]
+     , col= "blue", pch= 17, ylab= expression(paste("Photosynthesis rate ( ",  mu," mol m"^-2, " s"^-1, ")"))
+     ,xlab= expression(paste("Ambient CO"[2], " concentration (ppm)")), main = substitute(paste(italic('Dactylis glomerata'))))
+points(cs$photo[cs$spec=="Dactylis glomerata"] [cs$treat=="chilled"] ~ 
+         cs$conc[cs$spec=="Dactylis glomerata"] [cs$treat=="chilled"]
+       , col= "red",pch= 20)
+
+
+## Holcus mollis 
+
+plot(cs$photo[cs$spec=="Holcus mollis"] [cs$treat=="nonchilled"] ~ 
+       cs$conc[cs$spec=="Holcus mollis"] [cs$treat=="nonchilled"]
+     , col= "blue", pch= 17, ylab='',xlab= expression(paste("Ambient CO"[2], " concentration (ppm)")), main = substitute(paste(italic('Holcus mollis'))))
+points(cs$photo[cs$spec=="Holcus mollis"] [cs$treat=="chilled"] ~ 
+         cs$conc[cs$spec=="Holcus mollis"] [cs$treat=="chilled"]
+       , col= "red",pch= 20)
+
+
+
+# Note: the species, co2 concentation (xlab= ) and Photosynthesis (ylab= ) was named within plot () function.
+ 
+```
+
+
+#  Multi-panel scatterplot in ggplot2 
+
+ Multi-panel scatterplot in ggplot2 
+ 
+```{r}
+library(ggplot2) 
+library(dplyr)
+```
+
+Photosynthesis rate is higher on non chilled treatment
+
+```{r}
+qplot(conc,photo, data = cs, color= treat, facets=.~ spec) + labs(x = expression(paste("Ambient CO"[2], " concentration (ppm)"))
+    , y= expression(paste("Photosynthesis rate ( ",  mu,"mol m"^-2, " s"^-1, ")"))) +
+  theme_light() + 
+  scale_colour_manual(labels= c("Chilled", "Non-chilled"), values= c("red","blue")) +
+  labs(colour="Treatment") +
+  theme(strip.text = element_text(face = "italic")) + 
+  theme(legend.title =element_text(size=10)) + 
+  theme(axis.title.x = element_text(size=10)) + 
+  theme(axis.title.y = element_text(size=10))
+```
+
+
+
+
+
+
+### Part 2 ###
+
+
+## Multi-panel barplot with insets 
+
+
+
+```{r}
+# Generating  aggregating and dataframe  data
+
+de =read.csv("drought_elevation.csv")
+head(de)
+str(de)
+```
+
+
+
+```{r}
+## Creating standard error (se) function
+
+se <- function(x, na.rm = FALSE)
+{
+  if(na.rm == TRUE)
+  {
+    sqrt(var(x, na.rm = T)/length(na.omit(x)))
+  }
+  else
+  {
+    sqrt(var(x)/length(x))
+  }
+}
+```
+
+
+
+Generating the Multi-panel barplot
+
+```{r,warning=FALSE,message=FALSE,results='hide'}
+
+##  insets and multipanel layout 
+
+layout(widths = c(0.9, 0.3),rbind(c(1, 2),
+             c(1, 1),
+             c(3, 4),
+             c(3, 3),
+             c(5, 6),
+             c(5, 5)))
+layout.show(n = 6)
+
+oper <- par(oma = c(1,1,1,1),mar = c(1,1,1,1))
+
+## top panel ##
+
+# Aggregating high elevation 
+
+de4 <- de[!de$elevation %in% c("mid","low"), ]
+de4 <- droplevels(de4) 
+levels(de4$elevation) # selecting high elevation
+de5 <- group_by(.data = de4, spec, treat ) %>%
+  summarise(vertical_mean = mean(height, na.rm = T),
+            neg = mean(height, na.rm = T) - se(height, na.rm = T),
+             pos= mean(height, na.rm = T) + se(height, na.rm = T))
+de5 <- de5[order(de5$treat), ]
+
+# Panel layout
+
+par(mar = c(.24, 2.1, .95, .55))
+
+# Wide format data transformation 
+
+format_wide <- acast(data= de5, treat ~ spec, value.var = "vertical_mean")
+
+# High elevation barplot
+
+barplot= barplot(format_wide, col = c("white", "blue"), ylim = c(0, 60), axisnames = F,  axes = T, 
+  beside = T) # barplot keeps the midpoints bars coordinates; creating texts/error bars 
+##--------- ---------##------ ------##
+## Extra 
+
+# legend
+legend(x = 0.8, y = 58, legend = c("Drought","Control"), bty = "n",
+       pch = 22,
+       pt.bg = c("blue", "white"), pt.cex = 2, cex = 1, y.intersp =
+         1.1, xpd = NA)
+##--------- ---------##------ ------##
+
+# High elevation title
+
+mtext("High", outer = F, line = -1.7,side = 3, cex = 0.8)
+
+# Error bars
+
+arrows(x0 = barplot,x1 = barplot, y1 = de5$neg, y0 = de5$pos, angle = 90, code = 3, 
+       length = 0.05 )
+
+# Adding a box to this panel
+
+box()
+
+
+## Plotting a density histogram for the elevation "low" in the inset
+
+
+hist(de$height[de$elevation== "high"], main = NA,col = "lightblue",axes = F, freq = F,las = 1 )
+densitys <- density(de$height[de$elevation== "high"])
+lines(densitys)
+
+
+##----------------------------------------##-------------------------------------------------##
+
+## middle panel ##
+
+
+#  data subsetting ; storing "mid" by ignoring high and low factor levels 
+
+
+de2 = de[!de$elevation %in% c("high","low"), ]
+de2 <- droplevels(de2) # remove unwanted factor levels
+levels(de2$elevation) # generating "mid"
+
+
+de3 <- group_by(.data = de2, spec ,treat ) %>%
+  summarise(vertical_mean = mean(height, na.rm = TRUE),
+            neg = mean(height, na.rm = TRUE) - se(height, na.rm = TRUE),
+            pos = mean(height, na.rm = TRUE) + se(height, na.rm = TRUE))
+de3
+
+# middle panel Margin
+
+par(mar = c(.24, 2.1, .95, .55))
+
+
+format_wide <- acast(de3, treat ~ spec, value.var = "vertical_mean") # install.packages(reshape2) | libaray('reshape2')
+
+# Creating a barplot for the elevation "mid"
+
+barplot= barplot(format_wide, col = c("white", "blue"), ylim = c(0, 60), axisnames = F, beside = T
+                 , axes = T) # barplot keeps the midpoints bars coordinates; creating texts/error bars 
+# Panel box
+box()
+
+# Mid text 
+
+mtext("Mid", side = 3, line = -1.7, cex = 0.8, outer = F)# Wide format data transformation
+
+##--------- ---------##------ ------##
+## Extra 
+
+mtext("Height (cm)",  line = 2, cex = 0.6, side = 2)
+
+##--------- ---------##------ ------##
+
+# Creating error bars
+
+arrows(x0 = barplot, x1 = barplot, y0= de3$pos, y1 = de3$neg , angle = 90, code = 3, length = 0.05)
+
+## Low elevation Density histogram 
+
+hist(de$height[de$elevation== "mid"], col = "lightblue", main = NA, las =
+1, axes = F, freq = F)
+densitys <- density(de$height[de$elevation== "mid"])
+lines(densitys)
+
+
+
+
+##----------------------------------------##-------------------------------------------------##
+# bottom  panel
+
+
+# Low elevation   
+
+l = de[!de$elevation %in% c("high", "mid"), ] # "[]" allow data subsetting 
+
+levels(l$elevation) # generating Low
+l= droplevels(l) #  unexploited factor levels are dropped
+
+# species, summary, standard error, treatment in  subsets generate  object group data.
+
+library(dplyr) #  data summary package loaded via library ()
+
+de1= group_by(.data = l, treat, spec) %>%
+  summarise(vertical_mean = mean(height, na.rm = TRUE),
+            neg = mean(height, na.rm = TRUE) - se(height, na.rm = TRUE),
+            pos = mean(height, na.rm = TRUE) + se(height, na.rm = TRUE))
+de1= de1[order(de1$treat), ]
+de1
+
+# Wide format data transformation 
+
+library(reshape2)
+
+#343434343434format_wide = acast(se1, treat ~ spec, value.var = "vertical_mean")
+
+# Margin control
+
+par(mar = c(2.1, 2.1, .95, .55))
+
+
+
+# Creating a low elevation barplot for three species
+
+barplot= barplot(format_wide, beside = T, ylim = c(0, 60), axes = T, axisnames
+                 = F, col = c("white", "blue")) # 'bp' stores the coordinates of the midpoints of the bars, which you can now use to add error bars or text.
+
+# Top panel text
+
+mtext("Low", outer = F, cex = 0.8,line = -1.7, side = 3, font = 1)
+
+# Error bars
+
+arrows(x0 = barplot, x1 = barplot, y0= de1$pos, y1 = de1$neg , length = 0.05, angle = 90, code = 3)
+
+
+##--------- ---------##------ ------##
+## Extra 
+
+# species x-axis, displaying Podocarpus totara as P.totara, 
+# Beilschmiedia tawa as B.tawa and Agathis australis as A.australis,
+text(barplot, -2,
+     c("A.australis","A.australis","B.tawa","B.tawa","P.totara","P.totara"
+     ),
+     srt = 45, adj = c(1, 0), xpd = NA, cex = 0.9)
+##--------- ---------##------ ------##
+
+#  box panel 
+box()
+
+hist(de$height[de$elevation== "low"], col = "lightblue", main = NA, las =
+       2, axes = F, freq = F)
+
+
+## low elevation density histogram 
+
+densitys <- density(de$height[de$elevation== "low"])
+lines(densitys)
+
+
+```
+
+
+
+
+## Part 3 ##
+
+
+## Multli-panel map 
+
+
+
+```{r}
+
+# Packages  
+
+library(ggplot2)
+library(ggmap)
+library(ggthemes) 
+library(RStoolbox) 
+library(raster) 
+library(ggsn) 
+library(mapdata) 
+library(broom)
+library(rmapshaper)
+library(colorRamps)
+library(RColorBrewer)
+
+#install.packages(c('ggmap','ggthemes','ggplot2', 'ggmap', 'ggthemes', 'RStoolbox', 'ggsn', 'raster', 'mapdata', 'broom', 'rmapshaper', 'colorRamps','RColorBrewer'))
+
+#install.packages(c('RStoolbox', 'ggsn', 'mapdata', 'rmapshaper', 'colorRamps',type = "binary"))
+
+```
+
+
+Australia States 
+
+```{r}
+# Australia States
+
+aus = getData(name = "GADM", country= "Australia", level= 1)
+nrow(tidy(aus)) # 1426114 polygon areas
+
+
+# Adding Australia State colours
+
+cols= colorRampPalette(colors= c("red", "orange", "grey", "darkgreen", "purple")) 
+
+# creating a Australia State map with distinct colours
+
+t = ggplot(data= aus, aes(x= long, y= lat,map_id= id, group= group)) + 
+  theme_map() +
+  coord_quickmap() +
+  geom_polygon(size= 0.5,aes(fill= id)) + 
+  guides(fill= F) +
+  scale_fill_manual(values = cols(n= 11)) 
+  t
+
+#  creating labels or texts of states in the Australia map 
+
+states= t + annotate(geom = "text", x = 122, y = -24.8485, label = "Western \n Australia") +
+  annotate(geom = "text", x = 133.5, y = -19.9485, label = "Northern\nTerritory") + 
+  annotate(geom = "text", x = 134.5, y = -28.9485, label = "South \n Australia") + 
+  annotate(geom = "text", x = 144.5, y = -23, label = "Queensland") + 
+  annotate(geom = "text", x = 147.5, y = -32, label = "New South \n Wales") +
+  annotate(geom = "text", x = 144.8, y = -36.9, label = "Victoria") +
+  annotate(geom = "text", x = 146.8, y = -42, label = "Tasmania") 
+
+states
+```
+
+
+
+Digital elevation models (DEM) of Australia 
+
+```{r}
+## Download altitude dataset
+oz_alt= getData(name = "alt", country = "AUS") 
+
+# selects australia via country = "AUS" and elevation from name = "alt" 
+oz_alt
+# Raster with elevation data can calculate the aspect, 
+#any remaining terrain traits and slope of an area 
+# (note: coordinate reference system (lon/lat) need to be in meters).
+
+oz_terr= terrain(opt = c("slope", "aspect"), x = oz_alt[[1]])
+
+oz_terr$slope # indiates australia geograpical information 
+
+## Compute the hill shade from the slope and aspect layer 
+
+oz_hillshade= hillShade(slope = oz_terr$slope, aspect = oz_terr$aspect)
+
+## DEM map of NZ
+
+## Crop the map by finding the studied site
+
+
+s= extent(c(xmin =  86.842428, xmax = 158.068268, ymin = -49.887759, ymax =-10.240108)) # ss is the studied site
+
+## the hill shade raster is cropped via reference ss ( studied site)
+
+oz_hillshade2= crop(x = oz_hillshade, y = s)
+
+## Same for the elevations
+
+oz_alt2= crop(x = oz_alt, y = s)
+
+## Colour palette for the DEM
+
+library(RColorBrewer)
+
+
+bbg <- colorRampPalette(colors = brewer.pal(n = 11, name = "BrBG")) 
+
+
+RdYlBu <- colorRampPalette(colors = rev(brewer.pal(n = 11, "RdYlBu")))
+
+# creating a DEM (note use help file or tab to find the arguments functions, values, usage, details)
+
+oz.elv=  ggR(oz_hillshade2) + ggR(oz_alt2, geom_raster = T, ggLayer = T, alpha = 0.75, ggObj = T) + 
+  
+         
+  
+  scale_fill_gradientn(colours = bbg(n = 1500), 
+                       
+                       
+                      na.value = "transparent", limits = c(0, 1500), name = "Elevation", 
+                       
+                        expand = c(2, 1),
+                       
+                             guide = guide_colourbar(nbin = 2000, barwidth = 0.7, 
+                                               
+                                    barheight = 10, 
+                                               
+                                    title.theme = element_text(size = 12), 
+                                               
+                                    label.theme = element_text(size = 10), 
+                                               
+                                    draw.ulim = F)) + 
+                                              
+                                    coord_quickmap()  + 
+                                                    
+                                    theme_map() + 
+  
+  
+theme(legend.position = c(0.9, 0.4),legend.background = element_rect(colour = NA, fill = NA))
+
+oz.elv
+```
+
+
+
+Adding the maps together 
+
+
+```{r}
+#install.packages('cowplot')
+library(cowplot)
+library(gridExtra)# generates grid.arrange() function
+library(cowplot)
+library(gridExtra)
+```
+
+
+```{r}
+grid.arrange (oz.elv,states, layout_matrix= 
+                rbind(c(2, 2, 1, 1),
+                     c(2, 2, 1, 1),
+                      c(2, 2, 1, 1),
+                      c(2, 2, 1, 1)),
+              heights = c(10, 10, 0, 0), widths = c(1, 1, 2, 2))
+```
+
+
